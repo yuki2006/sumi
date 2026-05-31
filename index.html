@@ -105,14 +105,6 @@
       <label for="rate">速さ</label>
       <input type="range" id="rate" min="0.5" max="1.5" step="0.1" value="1" />
     </div>
-    <div class="row">
-      <label for="pitch">高さ</label>
-      <input type="range" id="pitch" min="0.5" max="1.5" step="0.1" value="1" />
-    </div>
-    <div class="row">
-      <label for="voice">声</label>
-      <select id="voice"></select>
-    </div>
   </div>
 
   <p class="hint" id="hint"></p>
@@ -121,59 +113,49 @@
   const synth = window.speechSynthesis;
   const btn = document.getElementById("sayBtn");
   const rate = document.getElementById("rate");
-  const pitch = document.getElementById("pitch");
-  const voiceSel = document.getElementById("voice");
   const hint = document.getElementById("hint");
 
   const TEXT = "すみません";
-  let jaVoices = [];
+  const AUDIO_SRC = "sumimasen.m4a";
 
-  if (!synth) {
-    hint.textContent = "このブラウザは音声合成に対応していません。";
-    btn.disabled = true;
-  }
+  // 録音した音声ファイルを主音源にする（どの端末でも同じ声で鳴る）
+  const audio = new Audio(AUDIO_SRC);
+  audio.preload = "auto";
 
-  function loadVoices() {
-    const all = synth.getVoices();
-    jaVoices = all.filter(v => v.lang && v.lang.toLowerCase().startsWith("ja"));
-    voiceSel.innerHTML = "";
+  let stopPulse = () => btn.classList.remove("pulsing");
 
-    const list = jaVoices.length ? jaVoices : all;
-    if (!list.length) return;
-
-    list.forEach((v, i) => {
-      const opt = document.createElement("option");
-      opt.value = v.name;
-      opt.textContent = v.name + (v.lang ? " (" + v.lang + ")" : "");
-      voiceSel.appendChild(opt);
-    });
-
-    if (!jaVoices.length) {
-      hint.textContent = "日本語の音声が見つかりません。利用可能な声で再生します。";
+  // 端末に音声合成が無い場合のフォールバック
+  function speakFallback() {
+    if (!synth) {
+      hint.textContent = "この端末では音声を再生できませんでした。";
+      stopPulse();
+      return;
     }
-  }
-
-  loadVoices();
-  if (synth) synth.onvoiceschanged = loadVoices;
-
-  function speak() {
-    if (!synth) return;
     synth.cancel();
-
     const u = new SpeechSynthesisUtterance(TEXT);
     u.lang = "ja-JP";
     u.rate = parseFloat(rate.value);
-    u.pitch = parseFloat(pitch.value);
-
-    const all = synth.getVoices();
-    const chosen = all.find(v => v.name === voiceSel.value);
-    if (chosen) u.voice = chosen;
-
-    btn.classList.add("pulsing");
-    u.onend = () => btn.classList.remove("pulsing");
-    u.onerror = () => btn.classList.remove("pulsing");
-
+    const ja = synth.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith("ja"));
+    if (ja) u.voice = ja;
+    u.onend = stopPulse;
+    u.onerror = stopPulse;
     synth.speak(u);
+  }
+  if (synth) synth.getVoices(); // 一部ブラウザで声リストを先読み
+
+  function speak() {
+    btn.classList.add("pulsing");
+    audio.onended = stopPulse;
+    audio.onerror = speakFallback;
+    try {
+      audio.currentTime = 0;
+      audio.playbackRate = parseFloat(rate.value);
+    } catch (e) {}
+    const p = audio.play();
+    if (p && p.catch) {
+      // 録音音声が再生できなければ合成音声で代替
+      p.catch(() => speakFallback());
+    }
   }
 
   btn.addEventListener("click", speak);
