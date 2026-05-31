@@ -103,7 +103,7 @@
   <div class="controls">
     <div class="row">
       <label for="vol">音量</label>
-      <input type="range" id="vol" min="1" max="5" step="0.5" value="3" />
+      <input type="range" id="vol" min="1" max="3" step="0.25" value="1" />
     </div>
     <div class="row">
       <label for="rate">速さ</label>
@@ -117,6 +117,7 @@
   const synth = window.speechSynthesis;
   const btn = document.getElementById("sayBtn");
   const rate = document.getElementById("rate");
+  const vol = document.getElementById("vol");
   const hint = document.getElementById("hint");
 
   const TEXT = "すみません";
@@ -125,6 +126,25 @@
   // 録音した音声ファイルを主音源にする（どの端末でも同じ声で鳴る）
   const audio = new Audio(AUDIO_SRC);
   audio.preload = "auto";
+  audio.volume = 1.0;
+
+  // Web Audio で端末の最大音量を超えて増幅する
+  let audioCtx, gainNode;
+  function ensureAudioGraph() {
+    if (audioCtx) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = new Ctx();
+      const src = audioCtx.createMediaElementSource(audio);
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = parseFloat(vol.value);
+      src.connect(gainNode).connect(audioCtx.destination);
+    } catch (e) { audioCtx = null; }
+  }
+  vol.addEventListener("input", () => {
+    if (gainNode) gainNode.gain.value = parseFloat(vol.value);
+  });
 
   let stopPulse = () => btn.classList.remove("pulsing");
 
